@@ -7,6 +7,7 @@ import { DrugInfo } from './features/DrugInfo';
 import { InteractionChecker } from './features/InteractionChecker';
 import { Promkes } from './features/Promkes';
 import { Settings } from './features/Settings';
+import { Farmaquiz } from './features/Farmaquiz';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.SWAMEDIKASI);
@@ -32,6 +33,8 @@ const App: React.FC = () => {
         return <DrugInfo />;
       case View.INTERACTION:
         return <InteractionChecker />;
+      case View.FARMAQUIZ:
+        return <Farmaquiz />;
       case View.PROMKES:
         return <Promkes />;
       case View.SETTINGS:

@@ -3,6 +3,7 @@ export enum View {
   SWAMEDIKASI = 'swamedikasi',
   DRUG_INFO = 'drug_info',
   INTERACTION = 'interaction',
+  FARMAQUIZ = 'farmaquiz',
   PROMKES = 'promkes',
   SETTINGS = 'settings',
 }
@@ -48,3 +49,23 @@ export const STYLE_OPTIONS = [
 ];
 
 export const IMAGE_SIZES = ["1K", "2K", "4K"];
+
+// QUIZ TYPES
+export type QuizCategory = 'Farmasi Klinis' | 'Farmasi Industri' | 'Manajemen Farmasi';
+
+export interface QuizQuestion {
+  id: number;
+  question: string;
+  options: string[]; // [A, B, C, D]
+  correctAnswer: number; // Index 0-3
+  explanation: string;
+  reference: string;
+}
+
+export interface QuizResult {
+  score: number;
+  correctCount: number;
+  wrongCount: number;
+  userAnswers: number[]; // Index of answers selected by user
+  questions: QuizQuestion[];
+}

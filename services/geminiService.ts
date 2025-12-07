@@ -1,5 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
+import { QuizQuestion } from "../types";
 
 // Helper to get API Key (LocalStorage priority, fallback to env)
 const getApiKey = () => {
@@ -14,6 +15,49 @@ const getApiKey = () => {
   }
   return key;
 };
+
+// DATA REFERENSI DOWA (DAFTAR OBAT WAJIB APOTEK) - DIEKSTRAK DARI DOKUMEN RESMI
+const DOWA_KNOWLEDGE_BASE = `
+REFERENSI RESMI DOWA (DAFTAR OBAT WAJIB APOTEK) INDONESIA:
+
+ATURAN UMUM: Obat-obat berikut adalah Obat Keras yang DIPERBOLEHKAN diserahkan oleh Apoteker tanpa resep dokter, dengan batasan jumlah tertentu.
+
+DOWA NO. 1:
+1. Oral Kontrasepsi: Max 1 siklus (Untuk siklus ke-2 dst, siklus pertama harus resep dokter). Contoh: Linestrenol, Ethinyl estradiol kombinasi.
+2. Obat Saluran Cerna (Antasid + Sedatif/Spasmodik): Max 20 tablet. Contoh: Mg Trisilikat/Al.Oksida + Papaverin/Diazepam.
+3. Anti Spasmodik: Papaverin, Hiosin Butilbromida (Max 20 tab).
+4. Anti Mual: Metoklopramid HCl (Max 20 tab).
+5. Laksan: Bisakodil Supp (Max 3 supp).
+6. Obat Mulut/Tenggorokan: Hexetidine, Triamcinolone acetonide (Max 1 botol/tube).
+7. Obat Saluran Nafas (Asma): Salbutamol, Terbutalin, Ketotifen (Max 20 tab, 1 sirup, 1 inhaler). *Hanya pengobatan ulangan*.
+8. Mukolitik: Asetilsistein, Karbosistein, Bromheksin (Max 20 tab / 1 sirup).
+9. Analgetik/Antipiretik: Metampiron (Max 20 tab), Asam Mefenamat (Max 20 tab).
+10. Antihistamin: Mebhidrolin, Pheniramin, Astemizol (Max 20 tab).
+11. Obat Cacing: Mebendazol (Max 6 tab / 1 sirup).
+12. Obat Kulit Topikal:
+    - Antibiotik: Tetrasiklin, Kloramfenikol, Gentamisin, Eritromisin, Framisetin (Max 1 tube).
+    - Kortikosteroid: Hidrokortison, Betametason, Triamsinolon (Max 1 tube).
+    - Antifungi: Mikonazol, Nistatin, Tolnaftat, Econazol (Max 1 tube).
+    - Anestesi Lokal: Lidokain HCl (Max 1 tube).
+    - Pemucat Kulit: Hidrokuinon (Max 1 tube).
+
+DOWA NO. 2:
+1. Albendazol: Tab 200mg (6 tab), 400mg (3 tab).
+2. Bacitracin, Clindamicin (acne), Silver sulfadiazine: 1 tube.
+3. Kortikosteroid Topikal: Dexametason, Methylprednisolon, Prednisolon, Hidrokortison butirat (1 tube).
+4. NSAID Topikal/Oral: Diclofenac (1 tube), Piroxicam (1 tube), Ibuprofen (400mg/600mg Max 10 tab).
+5. Antifungi Topikal: Ketoconazole (Kadar <2% Krim 1 tube / Scalp sol 1 botol), Isoconazol.
+6. Omeprazole: Max 7 tablet.
+7. Sucralfate, Sulfasalazine: Max 20 tablet.
+
+DOWA NO. 3 (Umumnya Pengulangan Resep Dokter):
+1. Antiulkus: Famotidin (Max 10 tab 20/40mg), Ranitidin (Max 10 tab 150mg).
+2. Obat Kulit Akne: Asam Azeleat, Asam Fusidat, Motretinida, Tretinoin (Max 1 tube).
+3. Antiinfeksi TBC: Kategori I, II, III (Hanya satu paket pengulangan).
+4. Asam Urat & Nyeri: Allopurinol (Max 10 tab 100mg), Diklofenak Natrium (Max 10 tab 25mg), Piroksikam (Max 10 tab 10mg).
+5. Antihistamin: Setirizin (Cetirizine), Siproheptadin (Max 10 tab).
+6. Obat Mata/Telinga Antibodi: Gentamisin, Kloramfenikol (Max 1 tube/botol).
+`;
 
 // 1. Swamedikasi (Self-medication)
 export const analyzeSwamedikasi = async (
@@ -31,7 +75,7 @@ export const analyzeSwamedikasi = async (
   const modelName = 'gemini-2.5-flash'; 
 
   let prompt = `
-    Bertindaklah sebagai Apoteker profesional. Analisis pasien ini untuk Swamedikasi (Self-Medication).
+    Bertindaklah sebagai Apoteker profesional di Indonesia. Analisis pasien ini untuk Swamedikasi (Self-Medication).
     
     Data Pasien:
     - Usia: ${data.age}
@@ -43,15 +87,20 @@ export const analyzeSwamedikasi = async (
     
     ${image ? "Gambar kondisi disertakan untuk analisis visual." : ""}
 
+    ${DOWA_KNOWLEDGE_BASE}
+
     Instruksi Output:
     1.  Gunakan Bahasa Indonesia.
     2.  **WAJIB FORMAT TABEL**: Sajikan data utama dalam bentuk Tabel Markdown.
     3.  Gunakan Google Search untuk memvalidasi indikasi, dosis, dan interaksi.
-    4.  **ATURAN SITASI MUTLAK**: 
+    4.  **Safety Check: Duplikasi Terapi**: Periksa apakah obat yang sudah digunakan pasien memiliki kandungan yang sama dengan rekomendasi baru. Jika ya, berikan label "(OPSI: PILIH SALAH SATU)" dan peringatkan tentang risiko overdosis/duplikasi. Jangan menyarankan meminum keduanya sekaligus.
+    5.  **Prioritas Merk**: Boleh menyarankan obat paten/branded yang umum di Indonesia (misal: Siladex, Panadol, Silex, dll) selain generik, selama sesuai indikasi.
+    6.  **ATURAN SITASI MUTLAK**: 
         - Setiap sel tabel yang berisi fakta medis (indikasi, dosis, interaksi, saran) **WAJIB** diakhiri dengan nomor sitasi [n]. 
         - DILARANG menulis kalimat medis tanpa sitasi.
         - Contoh Benar: "Paracetamol 500mg [1]"
         - Contoh Salah: "Paracetamol 500mg"
+    7.  **Validasi DOWA**: Saat merekomendasikan obat, periksa apakah obat tersebut masuk kategori Obat Bebas, Bebas Terbatas, atau DOWA. Jika DOWA, pastikan jumlahnya sesuai aturan DOWA di atas. Jika obat keras NON-DOWA, arahkan ke dokter.
     
     Struktur Respon:
 
@@ -61,9 +110,9 @@ export const analyzeSwamedikasi = async (
     | ... | ... | ... [n] |
 
     ## Rekomendasi Obat Baru
-    | Nama Obat | Golongan | Alasan & Indikasi [Sitasi] |
-    | :--- | :--- | :--- |
-    | ... | ... | ... [n] |
+    | Nama Obat | Kategori (Bebas/DOWA) | Alasan & Indikasi [Sitasi] | Batasan Jumlah (Jika DOWA) |
+    | :--- | :--- | :--- | :--- |
+    | ... | ... | ... [n] | ... [n] |
     
     ## Aturan Pakai
     | Nama Obat | Dosis (sesuai usia/BB) | Frekuensi | Durasi Maks |
@@ -97,7 +146,7 @@ export const analyzeSwamedikasi = async (
       config: {
         thinkingConfig: { thinkingBudget: 0 },
         tools: [{ googleSearch: {} }],
-        systemInstruction: "Anda adalah Apoteker Profesional. Anda DILARANG membuat daftar referensi manual di akhir teks. Cukup gunakan sitasi inline [n] di setiap kalimat/fakta medis. UI akan menangani daftar link secara otomatis.",
+        systemInstruction: "Anda adalah Apoteker Profesional Indonesia. Patuhi aturan DOWA (Daftar Obat Wajib Apotek). Cek duplikasi terapi (polypharmacy). DILARANG membuat daftar referensi manual di akhir teks. Cukup gunakan sitasi inline [n]. UI akan menangani daftar link secara otomatis.",
       }
     });
     
@@ -352,6 +401,10 @@ export const generatePromkesMedia = async (
       apiAspectRatio = '9:16';
       promptSuffix = " Composition should be tall and narrow, suitable for a 1:3 vertical standing banner (X-banner).";
       break;
+    case '1:2':
+      // Fallback if leaked, though handled above. Map to 9:16 generally.
+      apiAspectRatio = '9:16';
+      break;
     default: apiAspectRatio = '1:1';
   }
 
@@ -380,6 +433,61 @@ export const generatePromkesMedia = async (
     throw new Error("No image generated");
   } catch (error) {
     console.error("Image Gen Error:", error);
+    throw error;
+  }
+};
+
+// 6. FARMAQUIZ GENERATOR
+export const generateQuizQuestions = async (category: string): Promise<QuizQuestion[]> => {
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
+  const modelName = 'gemini-2.5-flash';
+
+  const prompt = `
+    Anda adalah Pembuat Soal Ujian Kompetensi Apoteker Indonesia (UKAI).
+    Buatkan 20 soal latihan Pilihan Ganda (Multiple Choice) untuk kategori: "${category}".
+    
+    Persyaratan Soal:
+    1. Soal harus berbasis studi kasus klinis, perhitungan farmasi, atau regulasi industri sesuai kategori.
+    2. Tingkat kesulitan setara UKAI (HOTS - Higher Order Thinking Skills).
+    3. Referensi harus jelas (misal: Farmakope Indonesia Ed VI, CPOB 2018, PMK No 72/2016, Dipiro Ed 11).
+    4. Opsi jawaban ada 4 (A, B, C, D).
+    5. Sertakan pembahasan yang sangat mendalam dan analitis (mengapa jawaban benar, mengapa opsi lain salah).
+
+    Output WAJIB JSON Array murni tanpa markdown formatting (seperti \`\`\`json).
+    Format JSON:
+    [
+      {
+        "id": 1,
+        "question": "Seorang pasien...",
+        "options": ["A. Opsi 1", "B. Opsi 2", "C. Opsi 3", "D. Opsi 4"],
+        "correctAnswer": 0, // 0 untuk A, 1 untuk B, dst
+        "explanation": "Jawaban A benar karena... (Analisis). Opsi B salah karena...",
+        "reference": "PMK No 72 Tahun 2016 tentang..."
+      }
+    ]
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: { parts: [{ text: prompt }] },
+      config: {
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 }
+      }
+    });
+
+    const jsonText = response.text;
+    if (!jsonText) throw new Error("Empty response from AI");
+    
+    // Parse JSON
+    const questions = JSON.parse(jsonText) as QuizQuestion[];
+    
+    // Validate count (sometimes AI generates less/more, strict checking optional but good)
+    return questions.slice(0, 20); 
+
+  } catch (error) {
+    console.error("Quiz Gen Error:", error);
     throw error;
   }
 };

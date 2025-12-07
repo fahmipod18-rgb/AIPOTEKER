@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { View } from '../types';
-import { Pill, Activity, Files, Image as ImageIcon, Cross, Moon, Sun, Settings } from 'lucide-react';
+import { Pill, Activity, Files, Image as ImageIcon, Cross, Moon, Sun, Settings, GraduationCap } from 'lucide-react';
 
 interface SidebarProps {
   currentView: View;
@@ -15,6 +15,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, the
     { id: View.SWAMEDIKASI, label: 'Swamedikasi', icon: <Activity size={20} />, description: 'Layanan Swamedikasi' },
     { id: View.DRUG_INFO, label: 'Informasi Obat', icon: <Pill size={20} />, description: 'Pusat Informasi Obat' },
     { id: View.INTERACTION, label: 'Cek Interaksi', icon: <Files size={20} />, description: 'Analisis Interaksi' },
+    { id: View.FARMAQUIZ, label: 'Farmaquiz', icon: <GraduationCap size={20} />, description: 'Asah Pengetahuan' },
     { id: View.PROMKES, label: 'Media Promkes', icon: <ImageIcon size={20} />, description: 'Buat Poster/Konten' },
     { id: View.SETTINGS, label: 'Pengaturan', icon: <Settings size={20} />, description: 'API Key & Konfigurasi' },
   ];
