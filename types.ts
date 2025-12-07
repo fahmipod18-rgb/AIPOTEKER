@@ -41,11 +41,11 @@ export enum AspectRatio {
 }
 
 export const STYLE_OPTIONS = [
-  "Profesional Medis",
-  "Friendly Edukatif",
-  "Minimalis",
-  "Colorful",
-  "Corporate Clean"
+  "Infografis Edukasi (Padat Informasi)",
+  "Flat Vector Design (Kartun Medis)",
+  "Cheat Sheet / Rangkuman (Tabel & List)",
+  "Minimalis Modern (Grid Layout)",
+  "Instruksi Langkah-demi-Langkah"
 ];
 
 export const IMAGE_SIZES = ["1K", "2K", "4K"];

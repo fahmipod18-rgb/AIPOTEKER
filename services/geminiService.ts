@@ -285,37 +285,39 @@ export const checkInteractions = async (drugsInput: string, image: File | null) 
   }
 };
 
-// 4. Helper for Promkes Description Generation
+// 4. Helper for Promkes Description Generation (BANTU SAYA AI)
 export const generateVisualDescription = async (title: string, aspectRatio: string) => {
   const ai = new GoogleGenAI({ apiKey: getApiKey() });
   
+  // Adjusted for TEXT-HEAVY / INFOGRAPHIC Layouts
   let layoutAdvice = "";
   if (aspectRatio === '1:1') {
-    layoutAdvice = "Format Persegi (Square). Fokuskan subjek di tengah (centered composition).";
+    layoutAdvice = "LAYOUT: Dense Square Infographic. Split into 4 clear quadrants. Top left: Headline. Top right: Key stat/icon. Bottom left: Bullet points. Bottom right: Chart or diagram.";
   } else if (aspectRatio === '4:5') {
-    layoutAdvice = "Format Poster Portrait (4:5). Komposisi vertikal, sisakan ruang di atas untuk headline teks.";
+    layoutAdvice = "LAYOUT: Educational Poster (Vertical). 1. Header Area (20%). 2. Body Area (60%) featuring a step-by-step list (1, 2, 3) or a flowchart with vector icons and visible text blocks. 3. Footer Area (20%) for warnings/contact.";
   } else if (aspectRatio === '1:3') {
-    layoutAdvice = "Format X-Banner (Standing Banner 1:3). Komposisi sangat tinggi dan ramping. Subjek harus memanjang atau ditumpuk vertikal.";
+    layoutAdvice = "LAYOUT: Standing Banner (X-Banner). Top-to-bottom flow. Must look like a list. Header -> Point 1 -> Point 2 -> Point 3 -> Footer. High text density.";
   } else if (aspectRatio === '1:2') {
-    layoutAdvice = "Format Brosur Lipat Tiga (Leaflet 1:2). Deskripsikan tata letak yang cocok untuk dibagi menjadi 3 panel vertikal.";
+    layoutAdvice = "LAYOUT: Tri-fold Brochure style. Distinct vertical columns showing sequence of information.";
   }
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `Kamu adalah Art Director profesional untuk kampanye kesehatan.
+      contents: `You are an Information Designer and Medical Illustrator.
       
-      Tugas: Buatlah deskripsi visual yang detail, estetik, dan menarik untuk sebuah media promosi kesehatan.
-      Judul: "${title}"
-      Format Media: ${layoutAdvice}
+      TASK: Create a detailed prompt for generating a text-heavy EDUCATIONAL INFOGRAPHIC.
+      Topic: "${title}"
+      Format Strategy: ${layoutAdvice}
       
-      Instruksi:
-      - Sesuaikan komposisi visual dengan format media yang diminta di atas.
-      - Deskripsikan subjek utama (misal: dokter, pasien, atau metafora visual).
-      - Deskripsikan suasana (mood), pencahayaan, dan palet warna.
-      - Deskripsikan latar belakang.
-      - Output HANYA paragraf deskripsi visual dalam Bahasa Indonesia yang siap digunakan sebagai prompt untuk desainer (atau AI Image Generator). Jangan ada teks pengantar lain.
-      - Buatlah deskripsi yang memungkinkan hasil gambar terlihat bersih, modern, dan profesional.`,
+      CRITICAL INSTRUCTIONS:
+      1.  **DENSITY**: The image must look like a "Cheat Sheet" or "Reference Guide", NOT a book cover.
+      2.  **ELEMENTS**: Ask for "numbered lists", "bullet points", "process diagrams", "charts", and "text blocks".
+      3.  **STYLE**: Flat Vector, Clean Medical Design, Pastels/Blues. No photorealism.
+      4.  **TEXT SIMULATION**: Explicitly ask for "lines representing text" or "placeholder text blocks" to make it look informative.
+      
+      OUTPUT: A single descriptive paragraph in English describing the LAYOUT and CONTENT STRUCTURE.
+      Example: "A flat vector educational infographic about Diabetes. The layout features a large header. Below, three distinct sections labeled 1, 2, and 3 show vector icons of symptoms with block text descriptions next to them. The bottom section has a 'Do and Don't' comparison table. Clean white background with blue and orange accents."`,
       config: {
         thinkingConfig: { thinkingBudget: 0 },
       }
@@ -337,15 +339,26 @@ export const generatePromkesMedia = async (
 ): Promise<string[]> => {
   const ai = new GoogleGenAI({ apiKey: getApiKey() });
   
+  // Base prompt injection for High-Density Infographic style
+  const styleInjection = `
+  STYLE: ${style}. 
+  CORE REQUIREMENT: **INFORMATION-DENSE INFOGRAPHIC**. 
+  VISUALS: Flat vector graphics, clear typography hierarchy (Title > Subtitle > Body), organized grid system.
+  CONTENT: The image must contain visible "Text Blocks" (simulated text), "Bullet Points", "Numbered Lists", or "Diagrams". 
+  DO NOT CREATE: A simple cover art, a single big illustration, or abstract art. 
+  MAKE IT LOOK LIKE: A medical cheat sheet, a public health notice, or a textbook diagram page.
+  `;
+
   // LEAFLET SPECIAL CASE (2 Images, 3 Panels each)
   if (aspectRatio === '1:2') {
-    const basePrompt = `Create a ${style} tri-fold brochure/leaflet design. 1:2 vertical aspect ratio.
-    Title: "${title}"
-    Description: ${desc}.
-    IMPORTANT: The image MUST be visually divided into 3 vertical panels (tri-fold layout).`;
+    const basePrompt = `Design a ${style} tri-fold brochure/leaflet (Infographic Layout). 1:2 vertical aspect ratio.
+    Topic: "${title}"
+    Details: ${desc}.
+    ${styleInjection}
+    IMPORTANT: VISUALLY SPLIT INTO 3 VERTICAL COLUMNS. Fill columns with text blocks and small icons.`;
 
-    const promptA = `${basePrompt} This is SIDE A (OUTER SIDE / FRONT). Show the Cover Panel, Back Panel, and Folded-in Panel. High quality, professional text placement.`;
-    const promptB = `${basePrompt} This is SIDE B (INNER SIDE). Show the 3 inside panels with continuous or segmented content flow. Informative and structured.`;
+    const promptA = `${basePrompt} SIDE A (Outer). Column 1: Contact Info. Column 2: Back Panel (Summary). Column 3: Main Title Cover.`;
+    const promptB = `${basePrompt} SIDE B (Inner). Column 1: Introduction (Text block). Column 2: Main Symptoms (List with icons). Column 3: Treatment (Step-by-step).`;
 
     try {
       // Execute both requests in parallel
@@ -387,31 +400,30 @@ export const generatePromkesMedia = async (
 
   // STANDARD CASE (Single Image)
   let apiAspectRatio = "1:1";
-  let promptSuffix = "";
+  let compositionInstruction = "";
 
   switch (aspectRatio) {
     case '1:1': 
       apiAspectRatio = '1:1'; 
+      compositionInstruction = "Layout: Dense Grid Infographic. Split into quadrants. Include charts and text lists.";
       break;
     case '4:5': 
       apiAspectRatio = '3:4'; 
-      promptSuffix = " Composition should be optimized for a 4:5 poster crop, leaving some vertical margin.";
+      compositionInstruction = "Layout: Vertical Educational Poster. Header at top. Body contains a structured list of steps (1, 2, 3) or symptoms with icons and text descriptions. Footer with disclaimer.";
       break;
     case '1:3': 
       apiAspectRatio = '9:16';
-      promptSuffix = " Composition should be tall and narrow, suitable for a 1:3 vertical standing banner (X-banner).";
-      break;
-    case '1:2':
-      // Fallback if leaked, though handled above. Map to 9:16 generally.
-      apiAspectRatio = '9:16';
+      compositionInstruction = "Layout: X-Banner (Standing Banner). Stacked content blocks. Title -> Point 1 -> Point 2 -> Point 3. High information density.";
       break;
     default: apiAspectRatio = '1:1';
   }
 
-  const prompt = `Create a ${style} health promotion design.
+  const prompt = `Design a High-Density Educational Infographic.
   Title: "${title}"
   Content Description: ${desc}.
-  The design should be high quality, text-legible (if any), and visually professional for a pharmacy context. ${promptSuffix}`;
+  Layout Strategy: ${compositionInstruction}
+  ${styleInjection}
+  Ensure the result looks like a helpful medical reference document with organized information sections.`;
 
   try {
     const response = await ai.models.generateContent({
