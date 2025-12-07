@@ -33,8 +33,8 @@ export const Promkes: React.FC = () => {
     }
     setGeneratingDesc(true);
     try {
-      // Pass both title and aspectRatio to generate context-aware descriptions
-      const aiDesc = await generateVisualDescription(form.title, form.aspectRatio);
+      // Pass title, aspectRatio AND style to generate context-aware descriptions
+      const aiDesc = await generateVisualDescription(form.title, form.aspectRatio, form.style);
       setForm(prev => ({ ...prev, description: aiDesc }));
     } catch (err) {
       alert("Gagal membuat deskripsi otomatis.");
@@ -92,32 +92,9 @@ export const Promkes: React.FC = () => {
             </div>
           </div>
           
-          {/* STEP 3: Description (Dependent on Title & Format) */}
+          {/* STEP 3: Visual Style */}
           <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">3. Deskripsi Visual</label>
-              <button
-                type="button"
-                onClick={handleAutoDescription}
-                disabled={generatingDesc || !form.title}
-                className="flex items-center gap-1.5 text-[10px] font-medium text-primary hover:text-blue-700 dark:hover:text-blue-400 bg-primary/10 hover:bg-primary/20 px-2 py-1 rounded-md transition-all disabled:opacity-50"
-                title="AI akan membuat deskripsi berdasarkan Judul dan Format yang dipilih"
-              >
-                {generatingDesc ? <Sparkles size={10} className="animate-spin" /> : <Wand2 size={10} />}
-                {generatingDesc ? 'Membuat...' : 'Bantu Saya (AI)'}
-              </button>
-            </div>
-            <textarea 
-              required
-              className="w-full p-3 glass-panel rounded-lg border border-slate-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-primary/20 text-sm h-32 resize-none dark:text-white dark:bg-slate-900/50 placeholder:text-slate-400"
-              placeholder="Jelaskan gambaran visual atau klik 'Bantu Saya (AI)'..."
-              value={form.description}
-              onChange={e => setForm({...form, description: e.target.value})}
-            />
-          </div>
-
-          <div>
-             <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1">4. Gaya Visual</label>
+             <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1">3. Gaya Visual</label>
               <div className="grid grid-cols-2 gap-2">
                 {STYLE_OPTIONS.map((style) => (
                   <button
@@ -134,6 +111,30 @@ export const Promkes: React.FC = () => {
                   </button>
                 ))}
               </div>
+          </div>
+
+          {/* STEP 4: Description (Dependent on Title, Format, & Style) */}
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">4. Deskripsi Visual</label>
+              <button
+                type="button"
+                onClick={handleAutoDescription}
+                disabled={generatingDesc || !form.title}
+                className="flex items-center gap-1.5 text-[10px] font-medium text-primary hover:text-blue-700 dark:hover:text-blue-400 bg-primary/10 hover:bg-primary/20 px-2 py-1 rounded-md transition-all disabled:opacity-50"
+                title="AI akan membuat deskripsi berdasarkan Judul, Format, dan Gaya yang dipilih"
+              >
+                {generatingDesc ? <Sparkles size={10} className="animate-spin" /> : <Wand2 size={10} />}
+                {generatingDesc ? 'Membuat...' : 'Bantu Saya (AI)'}
+              </button>
+            </div>
+            <textarea 
+              required
+              className="w-full p-3 glass-panel rounded-lg border border-slate-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-primary/20 text-sm h-32 resize-none dark:text-white dark:bg-slate-900/50 placeholder:text-slate-400"
+              placeholder="Jelaskan gambaran visual atau klik 'Bantu Saya (AI)'..."
+              value={form.description}
+              onChange={e => setForm({...form, description: e.target.value})}
+            />
           </div>
 
           <button 

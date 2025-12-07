@@ -286,7 +286,7 @@ export const checkInteractions = async (drugsInput: string, image: File | null) 
 };
 
 // 4. Helper for Promkes Description Generation (BANTU SAYA AI)
-export const generateVisualDescription = async (title: string, aspectRatio: string) => {
+export const generateVisualDescription = async (title: string, aspectRatio: string, style: string) => {
   const ai = new GoogleGenAI({ apiKey: getApiKey() });
   
   // Adjusted for TEXT-HEAVY / INFOGRAPHIC Layouts
@@ -301,6 +301,20 @@ export const generateVisualDescription = async (title: string, aspectRatio: stri
     layoutAdvice = "LAYOUT: Tri-fold Brochure style. Distinct vertical columns showing sequence of information.";
   }
 
+  // Style-specific adjustments for the "Help Me AI" description generator
+  let styleAdvice = "";
+  if (style.includes("Analitis")) {
+    styleAdvice = "STYLE: Data-Driven. Must include bar charts, percentage circles, and grid layouts. Use limited color palette (Blue/Grey). Font must be monospaced or crisp sans-serif.";
+  } else if (style.includes("Minimalis")) {
+    styleAdvice = "STYLE: Minimalist Medical. Lots of whitespace (negative space). Thin lines, simple stroke icons, high contrast text. Very structured.";
+  } else if (style.includes("Ilustratif")) {
+    styleAdvice = "STYLE: Medical Illustration (Flat/Semi-Realistic). Feature a central anatomical or character illustration explaining the concept. Surrounding elements are supportive icons.";
+  } else if (style.includes("Corporate")) {
+    styleAdvice = "STYLE: Corporate Hospital. Professional photos or high-end stock style mixed with clean UI elements. Blue/Teal/White palette. Trustworthy look.";
+  } else if (style.includes("Storytelling")) {
+    styleAdvice = "STYLE: Storytelling Flow. Use a sequential layout (Problem -> Solution). Vibrant colors, expressive characters, emotional engagement.";
+  }
+
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
@@ -309,15 +323,15 @@ export const generateVisualDescription = async (title: string, aspectRatio: stri
       TASK: Create a detailed prompt for generating a text-heavy EDUCATIONAL INFOGRAPHIC.
       Topic: "${title}"
       Format Strategy: ${layoutAdvice}
+      Target Visual Style: "${style}" (${styleAdvice})
       
       CRITICAL INSTRUCTIONS:
       1.  **DENSITY**: The image must look like a "Cheat Sheet" or "Reference Guide", NOT a book cover.
       2.  **ELEMENTS**: Ask for "numbered lists", "bullet points", "process diagrams", "charts", and "text blocks".
-      3.  **STYLE**: Flat Vector, Clean Medical Design, Pastels/Blues. No photorealism.
-      4.  **TEXT SIMULATION**: Explicitly ask for "lines representing text" or "placeholder text blocks" to make it look informative.
+      3.  **TEXT SIMULATION**: Explicitly ask for "lines representing text" or "placeholder text blocks" to make it look informative.
+      4.  **SELLING POINT**: Make it look attractive and "shareable" on social media.
       
-      OUTPUT: A single descriptive paragraph in English describing the LAYOUT and CONTENT STRUCTURE.
-      Example: "A flat vector educational infographic about Diabetes. The layout features a large header. Below, three distinct sections labeled 1, 2, and 3 show vector icons of symptoms with block text descriptions next to them. The bottom section has a 'Do and Don't' comparison table. Clean white background with blue and orange accents."`,
+      OUTPUT: A single descriptive paragraph in English describing the LAYOUT, CONTENT STRUCTURE, and STYLE.`,
       config: {
         thinkingConfig: { thinkingBudget: 0 },
       }
@@ -339,14 +353,28 @@ export const generatePromkesMedia = async (
 ): Promise<string[]> => {
   const ai = new GoogleGenAI({ apiKey: getApiKey() });
   
-  // Base prompt injection for High-Density Infographic style
-  const styleInjection = `
-  STYLE: ${style}. 
-  CORE REQUIREMENT: **INFORMATION-DENSE INFOGRAPHIC**. 
-  VISUALS: Flat vector graphics, clear typography hierarchy (Title > Subtitle > Body), organized grid system.
-  CONTENT: The image must contain visible "Text Blocks" (simulated text), "Bullet Points", "Numbered Lists", or "Diagrams". 
-  DO NOT CREATE: A simple cover art, a single big illustration, or abstract art. 
-  MAKE IT LOOK LIKE: A medical cheat sheet, a public health notice, or a textbook diagram page.
+  // Dynamic Style Injection based on User Selection
+  let specificStyleInstructions = "";
+  
+  if (style.includes("Analitis")) {
+    specificStyleInstructions = "VISUALS: Data visualization focus. Use bar charts, donut charts, and big bold percentage numbers. Modular grid layout. Clean, technical look.";
+  } else if (style.includes("Minimalis")) {
+    specificStyleInstructions = "VISUALS: Swiss Design style. Heavy use of negative space (whitespace). High contrast typography (Helvetica-ish). Simple stroke icons. No clutter.";
+  } else if (style.includes("Ilustratif")) {
+    specificStyleInstructions = "VISUALS: Medical Vector Illustration. Central focal point is a detailed flat or semi-realistic illustration of the organ/patient/drug. Surrounding text explains the mechanism.";
+  } else if (style.includes("Corporate")) {
+    specificStyleInstructions = "VISUALS: Professional Healthcare Brand. Trustworthy blue/white palette. Clean layout like a hospital brochure. May include photorealistic elements blended with vector UI.";
+  } else if (style.includes("Storytelling")) {
+    specificStyleInstructions = "VISUALS: Narrative Flow. Sequential panels (1->2->3). Vibrant, engaging colors. Expressive character illustrations showing emotion (pain -> relief).";
+  }
+
+  const globalInjector = `
+  CORE REQUIREMENT: **COMMERCIAL QUALITY INFOGRAPHIC**.
+  The image must look like a professionally designed, selling infographic found on top health portals (like Healthline or WHO).
+  CONTENT: Must contain visible "Text Blocks" (simulated text), "Bullet Points", "Numbered Lists", or "Diagrams".
+  DENSITY: High information density.
+  DO NOT CREATE: Abstract art, blurry text, or simple book covers.
+  ${specificStyleInstructions}
   `;
 
   // LEAFLET SPECIAL CASE (2 Images, 3 Panels each)
@@ -354,7 +382,7 @@ export const generatePromkesMedia = async (
     const basePrompt = `Design a ${style} tri-fold brochure/leaflet (Infographic Layout). 1:2 vertical aspect ratio.
     Topic: "${title}"
     Details: ${desc}.
-    ${styleInjection}
+    ${globalInjector}
     IMPORTANT: VISUALLY SPLIT INTO 3 VERTICAL COLUMNS. Fill columns with text blocks and small icons.`;
 
     const promptA = `${basePrompt} SIDE A (Outer). Column 1: Contact Info. Column 2: Back Panel (Summary). Column 3: Main Title Cover.`;
@@ -422,7 +450,7 @@ export const generatePromkesMedia = async (
   Title: "${title}"
   Content Description: ${desc}.
   Layout Strategy: ${compositionInstruction}
-  ${styleInjection}
+  ${globalInjector}
   Ensure the result looks like a helpful medical reference document with organized information sections.`;
 
   try {
