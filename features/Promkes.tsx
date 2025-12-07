@@ -1,23 +1,60 @@
 
-import React, { useState } from 'react';
-import { PromkesForm, AspectRatio, STYLE_OPTIONS, IMAGE_SIZES } from '../types';
+import React, { useState, useRef, useEffect } from 'react';
+import { PromkesForm, AspectRatio, STYLE_OPTIONS, IMAGE_SIZES, COLOR_PALETTES, ColorPaletteDef } from '../types';
 import { generatePromkesMedia, generateVisualDescription } from '../services/geminiService';
-import { Download, Sparkles, Image as ImageIcon, Wand2 } from 'lucide-react';
+import { Download, Sparkles, Image as ImageIcon, Wand2, Palette, ChevronDown } from 'lucide-react';
 
 export const Promkes: React.FC = () => {
   const [form, setForm] = useState<PromkesForm>({
-    title: '', description: '', aspectRatio: '1:1', style: STYLE_OPTIONS[0], size: '1K'
+    title: '', 
+    description: '', 
+    aspectRatio: '1:1', 
+    style: STYLE_OPTIONS[0],
+    colorPalette: COLOR_PALETTES[0].description, // Default: Acak description
+    size: '1K'
   });
+  
+  // State for Custom Dropdown
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const paletteRef = useRef<HTMLDivElement>(null);
+  const [selectedPaletteObj, setSelectedPaletteObj] = useState<ColorPaletteDef>(COLOR_PALETTES[0]);
+
   const [loading, setLoading] = useState(false);
   const [generatingDesc, setGeneratingDesc] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (paletteRef.current && !paletteRef.current.contains(event.target as Node)) {
+        setIsPaletteOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const handlePaletteSelect = (palette: ColorPaletteDef) => {
+    setSelectedPaletteObj(palette);
+    setForm({ ...form, colorPalette: palette.description });
+    setIsPaletteOpen(false);
+  };
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setImageUrls([]);
     try {
-      const urls = await generatePromkesMedia(form.title, form.description, form.aspectRatio, form.style, form.size);
+      const urls = await generatePromkesMedia(
+        form.title, 
+        form.description, 
+        form.aspectRatio, 
+        form.style, 
+        form.colorPalette,
+        form.size
+      );
       setImageUrls(urls);
     } catch (err) {
       alert("Gagal membuat gambar. Silakan coba lagi.");
@@ -33,8 +70,13 @@ export const Promkes: React.FC = () => {
     }
     setGeneratingDesc(true);
     try {
-      // Pass title, aspectRatio AND style to generate context-aware descriptions
-      const aiDesc = await generateVisualDescription(form.title, form.aspectRatio, form.style);
+      // Pass title, aspectRatio, style AND colorPalette
+      const aiDesc = await generateVisualDescription(
+        form.title, 
+        form.aspectRatio, 
+        form.style, 
+        form.colorPalette
+      );
       setForm(prev => ({ ...prev, description: aiDesc }));
     } catch (err) {
       alert("Gagal membuat deskripsi otomatis.");
@@ -113,16 +155,61 @@ export const Promkes: React.FC = () => {
               </div>
           </div>
 
-          {/* STEP 4: Description (Dependent on Title, Format, & Style) */}
+          {/* STEP 4: Color Palette (Custom Visual Dropdown) */}
+          <div ref={paletteRef} className="relative">
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1 flex items-center gap-1">
+              4. Nuansa Warna (Color Palette) <Palette size={12} />
+            </label>
+            
+            <button
+              type="button"
+              onClick={() => setIsPaletteOpen(!isPaletteOpen)}
+              className="w-full p-2.5 glass-panel rounded-lg border border-slate-200 dark:border-slate-700 outline-none text-sm dark:text-white dark:bg-slate-900/50 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                {/* Visual Swatches for Selected */}
+                <div className="flex -space-x-1">
+                   {selectedPaletteObj.colors.map((c, i) => (
+                     <div key={i} className="w-4 h-4 rounded-full border border-slate-300 shadow-sm" style={{ backgroundColor: c }}></div>
+                   ))}
+                </div>
+                <span className="font-medium text-slate-700 dark:text-slate-200">{selectedPaletteObj.label}</span>
+              </div>
+              <ChevronDown size={16} className={`text-slate-400 transition-transform ${isPaletteOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isPaletteOpen && (
+              <div className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
+                {COLOR_PALETTES.map((palette) => (
+                  <button
+                    key={palette.id}
+                    type="button"
+                    onClick={() => handlePaletteSelect(palette)}
+                    className={`w-full p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800 last:border-0 ${selectedPaletteObj.id === palette.id ? 'bg-blue-50 dark:bg-slate-800' : ''}`}
+                  >
+                     <span className="text-sm text-slate-700 dark:text-slate-300">{palette.label}</span>
+                     <div className="flex gap-1">
+                       {palette.colors.map((c, i) => (
+                         <div key={i} className="w-5 h-5 rounded border border-slate-200 dark:border-slate-600" style={{ backgroundColor: c }}></div>
+                       ))}
+                     </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* STEP 5: Description */}
           <div>
             <div className="flex justify-between items-center mb-1">
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">4. Deskripsi Visual</label>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">5. Deskripsi Visual</label>
               <button
                 type="button"
                 onClick={handleAutoDescription}
                 disabled={generatingDesc || !form.title}
                 className="flex items-center gap-1.5 text-[10px] font-medium text-primary hover:text-blue-700 dark:hover:text-blue-400 bg-primary/10 hover:bg-primary/20 px-2 py-1 rounded-md transition-all disabled:opacity-50"
-                title="AI akan membuat deskripsi berdasarkan Judul, Format, dan Gaya yang dipilih"
+                title="AI akan membuat deskripsi berdasarkan Judul, Format, Gaya, dan Warna yang dipilih"
               >
                 {generatingDesc ? <Sparkles size={10} className="animate-spin" /> : <Wand2 size={10} />}
                 {generatingDesc ? 'Membuat...' : 'Bantu Saya (AI)'}

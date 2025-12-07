@@ -286,7 +286,7 @@ export const checkInteractions = async (drugsInput: string, image: File | null) 
 };
 
 // 4. Helper for Promkes Description Generation (BANTU SAYA AI)
-export const generateVisualDescription = async (title: string, aspectRatio: string, style: string) => {
+export const generateVisualDescription = async (title: string, aspectRatio: string, style: string, colorPalette: string) => {
   const ai = new GoogleGenAI({ apiKey: getApiKey() });
   
   // Adjusted for TEXT-HEAVY / INFOGRAPHIC Layouts
@@ -298,21 +298,29 @@ export const generateVisualDescription = async (title: string, aspectRatio: stri
   } else if (aspectRatio === '1:3') {
     layoutAdvice = "LAYOUT: Standing Banner (X-Banner). Top-to-bottom flow. Must look like a list. Header -> Point 1 -> Point 2 -> Point 3 -> Footer. High text density.";
   } else if (aspectRatio === '1:2') {
-    layoutAdvice = "LAYOUT: Tri-fold Brochure style. Distinct vertical columns showing sequence of information.";
+    layoutAdvice = "LAYOUT: TRI-FOLD BROCHURE. Must be visually divided into 3 EQUAL VERTICAL COLUMNS (Panels). Panel 1 (Left), Panel 2 (Center), Panel 3 (Right). Distinct gutters between columns.";
   }
 
   // Style-specific adjustments for the "Help Me AI" description generator
   let styleAdvice = "";
   if (style.includes("Analitis")) {
-    styleAdvice = "STYLE: Data-Driven. Must include bar charts, percentage circles, and grid layouts. Use limited color palette (Blue/Grey). Font must be monospaced or crisp sans-serif.";
+    styleAdvice = "STYLE: Data-Driven. Must include bar charts, percentage circles, and grid layouts. Font must be monospaced or crisp sans-serif.";
   } else if (style.includes("Minimalis")) {
     styleAdvice = "STYLE: Minimalist Medical. Lots of whitespace (negative space). Thin lines, simple stroke icons, high contrast text. Very structured.";
   } else if (style.includes("Ilustratif")) {
     styleAdvice = "STYLE: Medical Illustration (Flat/Semi-Realistic). Feature a central anatomical or character illustration explaining the concept. Surrounding elements are supportive icons.";
   } else if (style.includes("Corporate")) {
-    styleAdvice = "STYLE: Corporate Hospital. Professional photos or high-end stock style mixed with clean UI elements. Blue/Teal/White palette. Trustworthy look.";
+    styleAdvice = "STYLE: Corporate Hospital. Professional photos or high-end stock style mixed with clean UI elements. Trustworthy look.";
   } else if (style.includes("Storytelling")) {
-    styleAdvice = "STYLE: Storytelling Flow. Use a sequential layout (Problem -> Solution). Vibrant colors, expressive characters, emotional engagement.";
+    styleAdvice = "STYLE: Storytelling Flow. Use a sequential layout (Problem -> Solution). Expressive character illustrations showing emotion (pain -> relief).";
+  }
+
+  // Color Palette Injection
+  let colorAdvice = "";
+  if (colorPalette.includes("Acak")) {
+    colorAdvice = "COLOR: Select a harmonious color palette suitable for the topic.";
+  } else {
+    colorAdvice = `COLOR PALETTE: STRICTLY use the "${colorPalette}" scheme. Ensure these colors are dominant in the background, text, and elements.`;
   }
 
   try {
@@ -324,14 +332,16 @@ export const generateVisualDescription = async (title: string, aspectRatio: stri
       Topic: "${title}"
       Format Strategy: ${layoutAdvice}
       Target Visual Style: "${style}" (${styleAdvice})
+      ${colorAdvice}
       
       CRITICAL INSTRUCTIONS:
       1.  **DENSITY**: The image must look like a "Cheat Sheet" or "Reference Guide", NOT a book cover.
       2.  **ELEMENTS**: Ask for "numbered lists", "bullet points", "process diagrams", "charts", and "text blocks".
       3.  **TEXT SIMULATION**: Explicitly ask for "lines representing text" or "placeholder text blocks" to make it look informative.
       4.  **SELLING POINT**: Make it look attractive and "shareable" on social media.
+      5.  **NO CONTACT PLACEHOLDERS**: STRICTLY FORBID the inclusion of "Contact" sections with placeholder text like "[Insert Phone]", "[Clinic Name]", or bracketed text. Focus 100% on the educational topic.
       
-      OUTPUT: A single descriptive paragraph in English describing the LAYOUT, CONTENT STRUCTURE, and STYLE.`,
+      OUTPUT: A single descriptive paragraph in English describing the LAYOUT, CONTENT STRUCTURE, COLORS, and STYLE.`,
       config: {
         thinkingConfig: { thinkingBudget: 0 },
       }
@@ -349,6 +359,7 @@ export const generatePromkesMedia = async (
   desc: string,
   aspectRatio: string,
   style: string,
+  colorPalette: string,
   size: string
 ): Promise<string[]> => {
   const ai = new GoogleGenAI({ apiKey: getApiKey() });
@@ -363,9 +374,15 @@ export const generatePromkesMedia = async (
   } else if (style.includes("Ilustratif")) {
     specificStyleInstructions = "VISUALS: Medical Vector Illustration. Central focal point is a detailed flat or semi-realistic illustration of the organ/patient/drug. Surrounding text explains the mechanism.";
   } else if (style.includes("Corporate")) {
-    specificStyleInstructions = "VISUALS: Professional Healthcare Brand. Trustworthy blue/white palette. Clean layout like a hospital brochure. May include photorealistic elements blended with vector UI.";
+    specificStyleInstructions = "VISUALS: Professional Healthcare Brand. Trustworthy look. Clean layout like a hospital brochure. May include photorealistic elements blended with vector UI.";
   } else if (style.includes("Storytelling")) {
-    specificStyleInstructions = "VISUALS: Narrative Flow. Sequential panels (1->2->3). Vibrant, engaging colors. Expressive character illustrations showing emotion (pain -> relief).";
+    specificStyleInstructions = "VISUALS: Narrative Flow. Sequential panels (1->2->3). Expressive character illustrations showing emotion (pain -> relief).";
+  }
+
+  // Color Palette Injection
+  let colorInstructions = "";
+  if (!colorPalette.includes("Acak")) {
+    colorInstructions = `COLOR PALETTE: STRICTLY use the "${colorPalette}" scheme. The entire infographic must follow this palette for backgrounds, accents, and text.`;
   }
 
   const globalInjector = `
@@ -373,20 +390,49 @@ export const generatePromkesMedia = async (
   The image must look like a professionally designed, selling infographic found on top health portals (like Healthline or WHO).
   CONTENT: Must contain visible "Text Blocks" (simulated text), "Bullet Points", "Numbered Lists", or "Diagrams".
   DENSITY: High information density.
-  DO NOT CREATE: Abstract art, blurry text, or simple book covers.
+  
+  NEGATIVE PROMPT / RESTRICTIONS:
+  - NO "Contact Us" sections with template placeholders (e.g., "[Phone Number]", "[Website]", "[Clinic Name]", "[Insert Text]"). 
+  - NO bracketed placeholders or empty form fields.
+  - The design should be purely educational.
+  - DO NOT CREATE: Abstract art, blurry text, or simple book covers.
+
   ${specificStyleInstructions}
+  ${colorInstructions}
   `;
 
   // LEAFLET SPECIAL CASE (2 Images, 3 Panels each)
   if (aspectRatio === '1:2') {
-    const basePrompt = `Design a ${style} tri-fold brochure/leaflet (Infographic Layout). 1:2 vertical aspect ratio.
-    Topic: "${title}"
-    Details: ${desc}.
-    ${globalInjector}
-    IMPORTANT: VISUALLY SPLIT INTO 3 VERTICAL COLUMNS. Fill columns with text blocks and small icons.`;
+    const structuralInstruction = `
+    STRICT LAYOUT REQUIREMENT: TRI-FOLD BROCHURE (3 PANELS).
+    The image canvas must be visually divided into **3 EQUAL VERTICAL COLUMNS**.
+    There must be clear visible gutters or folds between the 3 columns.
+    STYLE: ${style}. High Resolution Vector Infographic.
+    `;
 
-    const promptA = `${basePrompt} SIDE A (Outer). Column 1: Contact Info. Column 2: Back Panel (Summary). Column 3: Main Title Cover.`;
-    const promptB = `${basePrompt} SIDE B (Inner). Column 1: Introduction (Text block). Column 2: Main Symptoms (List with icons). Column 3: Treatment (Step-by-step).`;
+    const promptA = `
+    ${structuralInstruction}
+    CONTEXT: OUTER SIDE (Back Panel, Fold Panel, Front Cover).
+    
+    COLUMN 1 (Left - Back Panel): Minimalist generic safety advice icons (e.g. Wash hands, Wear mask). NO contact placeholders.
+    COLUMN 2 (Center - Fold Panel): Logo, Motto, Clean branding graphic.
+    COLUMN 3 (Right - FRONT COVER): Big Bold Title "${title}", Hero Illustration, Subtitle.
+    
+    Topic: ${desc}
+    ${globalInjector}
+    `;
+
+    const promptB = `
+    ${structuralInstruction}
+    CONTEXT: INNER SIDE (Left Panel, Center Panel, Right Panel).
+    
+    COLUMN 1 (Left): Introduction/Problem. Title at top, followed by a text block and an icon.
+    COLUMN 2 (Center): Main Infographic. A process diagram or list of symptoms. Dense information.
+    COLUMN 3 (Right): Treatment/Solution. Numbered list (1, 2, 3) and a generic "Consult your doctor" icon at the bottom.
+    
+    Topic: ${desc}
+    ${globalInjector}
+    `;
 
     try {
       // Execute both requests in parallel
