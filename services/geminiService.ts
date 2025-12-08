@@ -59,6 +59,42 @@ DOWA NO. 3 (Umumnya Pengulangan Resep Dokter):
 6. Obat Mata/Telinga Antibodi: Gentamisin, Kloramfenikol (Max 1 tube/botol).
 `;
 
+// Helper to handle File to Part (Binary or Text)
+const fileToPart = async (file: File) => {
+  // If file is text-based (CSV, TXT, JSON), read as string
+  if (file.type === 'text/plain' || file.type === 'text/csv' || file.type === 'application/json') {
+    return new Promise<{ text: string }>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        resolve({ text: `\n\n[ISI FILE SOURCE "${file.name}"]:\n${reader.result as string}\n[AKHIR FILE SOURCE]\n` });
+      };
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  }
+
+  // If file is supported binary (PDF, Image), read as base64
+  if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+     return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = (reader.result as string).split(',')[1];
+        resolve({
+          inlineData: {
+            data: base64String,
+            mimeType: file.type,
+          },
+        });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  throw new Error(`Format file ${file.type} tidak didukung secara langsung. Mohon gunakan PDF, Gambar, CSV, atau TXT.`);
+};
+
+
 // 1. Swamedikasi (Self-medication)
 export const analyzeSwamedikasi = async (
   data: {
@@ -69,7 +105,8 @@ export const analyzeSwamedikasi = async (
     treatment: string;
     patientCondition: string;
   },
-  image: File | null
+  image: File | null,
+  sourceFile: File | null // NEW: Source of stock
 ) => {
   const ai = new GoogleGenAI({ apiKey: getApiKey() });
   const modelName = 'gemini-2.5-flash'; 
@@ -86,21 +123,36 @@ export const analyzeSwamedikasi = async (
     - Tindakan yang sudah dilakukan: ${data.treatment}
     
     ${image ? "Gambar kondisi disertakan untuk analisis visual." : ""}
+    ${sourceFile ? "FILE SOURCE (Daftar Stok Obat Pribadi User) TELAH DILAMPIRKAN. Prioritaskan obat dari sini." : "User TIDAK melampirkan daftar stok obat."}
 
     ${DOWA_KNOWLEDGE_BASE}
 
     Instruksi Output:
     1.  Gunakan Bahasa Indonesia.
     2.  **WAJIB FORMAT TABEL**: Sajikan data utama dalam bentuk Tabel Markdown.
-    3.  Gunakan Google Search untuk memvalidasi indikasi, dosis, dan interaksi.
-    4.  **Safety Check: Duplikasi Terapi**: Periksa apakah obat yang sudah digunakan pasien memiliki kandungan yang sama dengan rekomendasi baru. Jika ya, berikan label "(OPSI: PILIH SALAH SATU)" dan peringatkan tentang risiko overdosis/duplikasi. Jangan menyarankan meminum keduanya sekaligus.
-    5.  **Prioritas Merk**: Boleh menyarankan obat paten/branded yang umum di Indonesia (misal: Siladex, Panadol, Silex, dll) selain generik, selama sesuai indikasi.
-    6.  **ATURAN SITASI MUTLAK**: 
-        - Setiap sel tabel yang berisi fakta medis (indikasi, dosis, interaksi, saran) **WAJIB** diakhiri dengan nomor sitasi [n]. 
-        - DILARANG menulis kalimat medis tanpa sitasi.
-        - Contoh Benar: "Paracetamol 500mg [1]"
-        - Contoh Salah: "Paracetamol 500mg"
-    7.  **Validasi DOWA**: Saat merekomendasikan obat, periksa apakah obat tersebut masuk kategori Obat Bebas, Bebas Terbatas, atau DOWA. Jika DOWA, pastikan jumlahnya sesuai aturan DOWA di atas. Jika obat keras NON-DOWA, arahkan ke dokter.
+    
+    3.  **LOGIKA KETERSEDIAAN OBAT & SOURCE FILE (CRITICAL)**:
+        - **SKENARIO A: Jika TIDAK ADA File Source**:
+          - Berikan rekomendasi obat terbaik secara klinis (Generik/Paten/Campuran).
+          - **DILARANG** menulis label "[TERSEDIA DI STOK]" atau "[TIDAK TERSEDIA DI STOK]" sama sekali.
+        
+        - **SKENARIO B: Jika ADA File Source**:
+          - Cek apakah obat yang direkomendasikan ada di dalam daftar source.
+          - Jika **ADA**: Tambahkan label **"{{GREEN:[TERSEDIA DI STOK]}}"**.
+          - Jika **TIDAK ADA** (tapi obat ini penting secara klinis): Tambahkan label **"{{RED:[TIDAK TERSEDIA DI STOK]}}"**.
+          - **PRIORITAS**: Utamakan obat yang tersedia di stok **HANYA JIKA** indikasi medisnya sesuai dan aman.
+          - **SAFETY FIRST**: JANGAN memaksakan obat dari stok jika tidak ampuh atau kontraindikasi. Jika stok tidak memadai, WAJIB sarankan obat luar (tandai dengan {{RED:[TIDAK TERSEDIA DI STOK]}}).
+
+    4.  **Strategi Rekomendasi (Multiple Options)**:
+        - **PENTING: PISAHKAN TABEL BERDASARKAN KELUHAN**. Jangan gabungkan semua obat dalam satu tabel besar. Buat Sub-Header untuk setiap gejala (misal: "Untuk Demam", "Untuk Batuk").
+        - Berikan 2-3 Opsi Obat per gejala (jika memungkinkan).
+        - **FILTER DUPLIKASI ZAT AKTIF**: DILARANG menyarankan obat tunggal (misal CTM) jika sudah menyarankan obat campuran yang mengandung zat tersebut (misal Konidin) dalam satu rangkaian terapi. Pilih salah satu yang terbaik.
+        - **TAG PILIHAN**:
+          - JIKA ada >1 opsi obat untuk satu gejala (artinya user harus memilih), tambahkan label "*(OPSI: PILIH SALAH SATU)*" pada nama obat.
+          - JIKA hanya ada 1 obat rekomendasi untuk gejala tersebut, DILARANG memberikan label tersebut.
+    
+    5.  **Formatting**: Nama obat **TEBAL** (Bold). Gunakan merek populer (Panadol, Siladex, dll) atau Generik.
+    6.  **ATURAN SITASI MUTLAK**: Setiap sel tabel berisi fakta medis WAJIB diakhiri sitasi [n].
     
     Struktur Respon:
 
@@ -109,34 +161,63 @@ export const analyzeSwamedikasi = async (
     | :--- | :--- | :--- |
     | ... | ... | ... [n] |
 
-    ## Rekomendasi Obat Baru
-    | Nama Obat | Kategori (Bebas/DOWA) | Alasan & Indikasi [Sitasi] | Batasan Jumlah (Jika DOWA) |
-    | :--- | :--- | :--- | :--- |
-    | ... | ... | ... [n] | ... [n] |
+    ## Rekomendasi Pengobatan (Dikelompokkan per Gejala)
+    
+    ### 1. Untuk Mengatasi [Nama Gejala, misal: Demam]
+    | Nama Obat (Opsi) | Kandungan Zat Aktif | Kategori (Bebas/DOWA) | Alasan & Indikasi [Sitasi] | Batasan Jumlah (Jika DOWA) |
+    | :--- | :--- | :--- | :--- | :--- |
+    | **Nama Obat A** {{GREEN:[TERSEDIA DI STOK]}} *(OPSI: PILIH SALAH SATU)* | ... | ... | ... [n] | ... |
+    | **Nama Obat B** {{RED:[TIDAK TERSEDIA DI STOK]}} *(OPSI: PILIH SALAH SATU)* | ... | ... | ... [n] | ... |
+
+    ### 2. Untuk Mengatasi [Nama Gejala, misal: Batuk Berdahak]
+    | Nama Obat (Opsi) | Kandungan Zat Aktif | Kategori (Bebas/DOWA) | Alasan & Indikasi [Sitasi] | Batasan Jumlah (Jika DOWA) |
+    | :--- | :--- | :--- | :--- | :--- |
+    | **Nama Obat C** ... | ... | ... | ... [n] | ... |
     
     ## Aturan Pakai
     | Nama Obat | Dosis (sesuai usia/BB) | Frekuensi | Durasi Maks |
     | :--- | :--- | :--- | :--- |
     | ... | ... [n] | ... | ... |
 
-    ## Non-Drug Treatment (Saran Perawatan)
+    ## Non-Drug Treatment
     - [Saran 1] [n]
-    - [Saran 2] [n]
-    
-    ## Upselling & Cross-selling
-    | Produk | Manfaat |
-    | :--- | :--- |
-    | ... | ... [n] |
     
     ## Red Flags (Segera ke Dokter Jika)
     - [Gejala 1] [n]
-    - [Gejala 2] [n]
   `;
 
   const parts: any[] = [{ text: prompt }];
+  
   if (image) {
-    const imagePart = await fileToPart(image);
-    parts.unshift(imagePart);
+    try {
+       const imagePart = await fileToPart(image);
+       // Check if text part (error handling for unsupported types handled in fileToPart)
+       if ('text' in imagePart) {
+         // Should not happen for image files, but for safety
+         parts[0].text += imagePart.text;
+       } else {
+         parts.unshift(imagePart);
+       }
+    } catch (e) {
+      console.warn("Skipping image attachment:", e);
+    }
+  }
+
+  // Handle Source File (PDF/Image/Text)
+  if (sourceFile) {
+    try {
+      const sourcePart = await fileToPart(sourceFile);
+      if ('text' in sourcePart) {
+        // It's a text file (CSV/TXT), append to prompt text
+        parts[0].text += sourcePart.text;
+      } else {
+        // It's a binary file (PDF), add as part
+        parts.unshift(sourcePart);
+      }
+    } catch (e) {
+      console.warn("Failed to attach source file", e);
+      throw e; // Rethrow to alert user in UI
+    }
   }
 
   try {
@@ -146,7 +227,7 @@ export const analyzeSwamedikasi = async (
       config: {
         thinkingConfig: { thinkingBudget: 0 },
         tools: [{ googleSearch: {} }],
-        systemInstruction: "Anda adalah Apoteker Profesional Indonesia. Patuhi aturan DOWA (Daftar Obat Wajib Apotek). Cek duplikasi terapi (polypharmacy). DILARANG membuat daftar referensi manual di akhir teks. Cukup gunakan sitasi inline [n]. UI akan menangani daftar link secara otomatis.",
+        systemInstruction: "Anda adalah Apoteker Profesional. Pisahkan tabel rekomendasi per gejala. Prioritaskan obat dari 'Source File' jika aman. Cek duplikasi terapi. Gunakan sitasi inline [n].",
       }
     });
     
@@ -260,8 +341,16 @@ export const checkInteractions = async (drugsInput: string, image: File | null) 
 
   const parts: any[] = [{ text: prompt }];
   if (image) {
-    const imagePart = await fileToPart(image);
-    parts.unshift(imagePart);
+    try {
+      const imagePart = await fileToPart(image);
+      if ('text' in imagePart) {
+         parts[0].text += imagePart.text;
+      } else {
+         parts.unshift(imagePart);
+      }
+    } catch (e) {
+      console.warn("Interaction Image Error", e);
+    }
   }
 
   try {
@@ -285,8 +374,38 @@ export const checkInteractions = async (drugsInput: string, image: File | null) 
   }
 };
 
-// 4. Helper for Promkes Description Generation (BANTU SAYA AI)
-export const generateVisualDescription = async (title: string, aspectRatio: string, style: string, colorPalette: string) => {
+// 4. Helper: Generate Headline (NEW)
+export const generateHeadline = async (topic: string) => {
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
+  const prompt = `
+    Anda adalah Creative Copywriter spesialis Kampanye Kesehatan.
+    Tugas: Buatkan 1 (satu) Judul/Headline Poster yang **Sangat Menarik (Catchy), Persuasif, dan Tidak Kaku**.
+    Topik: "${topic}".
+
+    Panduan Gaya:
+    - Gunakan Bahasa Indonesia yang **luwes, populer, dan mudah dipahami** oleh masyarakat awam.
+    - **Hindari** bahasa birokratis atau istilah medis yang terlalu teknis/rumit.
+    - Fokus pada **manfaat** atau **dampak emosional** (mengajak, mengingatkan, atau memberi solusi).
+    - Headline harus singkat, padat, dan "memancing" orang untuk membaca.
+    
+    Output: Hanya teks judulnya saja tanpa tanda petik.
+  `;
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: { thinkingConfig: { thinkingBudget: 0 } }
+    });
+    return response.text.trim().replace(/^"|"$/g, '');
+  } catch (error) {
+    console.error("Headline Gen Error:", error);
+    return "";
+  }
+};
+
+// 4b. Helper for Promkes Description Generation (BANTU SAYA AI)
+export const generateVisualDescription = async (topic: string, title: string, aspectRatio: string, style: string, colorPalette: string) => {
   const ai = new GoogleGenAI({ apiKey: getApiKey() });
   
   // Adjusted for TEXT-HEAVY / INFOGRAPHIC Layouts
@@ -298,7 +417,8 @@ export const generateVisualDescription = async (title: string, aspectRatio: stri
   } else if (aspectRatio === '1:3') {
     layoutAdvice = "LAYOUT: Standing Banner (X-Banner). Top-to-bottom flow. Must look like a list. Header -> Point 1 -> Point 2 -> Point 3 -> Footer. High text density.";
   } else if (aspectRatio === '1:2') {
-    layoutAdvice = "LAYOUT: TRI-FOLD BROCHURE. Must be visually divided into 3 EQUAL VERTICAL COLUMNS (Panels). Panel 1 (Left), Panel 2 (Center), Panel 3 (Right). Distinct gutters between columns.";
+    // UPDATED FOR FLAT TRI-FOLD (16:9 Landscape usually fits open brochures better than vertical)
+    layoutAdvice = "LAYOUT: FLAT 2D OPEN TRI-FOLD BROCHURE. The layout MUST consist of 3 EQUAL VERTICAL COLUMNS side-by-side. Column 1 (Intro/Problem), Column 2 (Detail/Process), Column 3 (Solution/Contact). Must look like a print-ready design file, NOT a 3D mockup.";
   }
 
   // Style-specific adjustments for the "Help Me AI" description generator
@@ -329,7 +449,8 @@ export const generateVisualDescription = async (title: string, aspectRatio: stri
       contents: `You are an Information Designer and Medical Illustrator.
       
       TASK: Create a detailed prompt for generating a text-heavy EDUCATIONAL INFOGRAPHIC.
-      Topic: "${title}"
+      MAIN TOPIC/SUBJECT: "${topic}"
+      POSTER HEADLINE: "${title}"
       Format Strategy: ${layoutAdvice}
       Target Visual Style: "${style}" (${styleAdvice})
       ${colorAdvice}
@@ -339,7 +460,8 @@ export const generateVisualDescription = async (title: string, aspectRatio: stri
       2.  **ELEMENTS**: Ask for "numbered lists", "bullet points", "process diagrams", "charts", and "text blocks".
       3.  **TEXT SIMULATION**: Explicitly ask for "lines representing text" or "placeholder text blocks" to make it look informative.
       4.  **SELLING POINT**: Make it look attractive and "shareable" on social media.
-      5.  **NO CONTACT PLACEHOLDERS**: STRICTLY FORBID the inclusion of "Contact" sections with placeholder text like "[Insert Phone]", "[Clinic Name]", or bracketed text. Focus 100% on the educational topic.
+      5.  **NO CONTACT PLACEHOLDERS**: STRICTLY FORBID the inclusion of "Contact" sections with template placeholders (e.g., "[Phone Number]", "[Website]", "[Clinic Name]", "[Insert Text]"). Focus 100% on the educational topic.
+      6.  **FLAT DESIGN**: If the format is Leaflet, ensure the description asks for a FLAT 2D LAYOUT with 3 COLUMNS, not a 3D perspective.
       
       OUTPUT: A single descriptive paragraph in English describing the LAYOUT, CONTENT STRUCTURE, COLORS, and STYLE.`,
       config: {
@@ -355,6 +477,7 @@ export const generateVisualDescription = async (title: string, aspectRatio: stri
 
 // 5. Media Promkes (Image Gen)
 export const generatePromkesMedia = async (
+  topic: string,
   title: string,
   desc: string,
   aspectRatio: string,
@@ -402,23 +525,34 @@ export const generatePromkesMedia = async (
   `;
 
   // LEAFLET SPECIAL CASE (2 Images, 3 Panels each)
+  // UPDATED LOGIC: Use 16:9 Landscape to allow ample space for 3 distinct columns.
   if (aspectRatio === '1:2') {
     const structuralInstruction = `
-    STRICT LAYOUT REQUIREMENT: TRI-FOLD BROCHURE (3 PANELS).
-    The image canvas must be visually divided into **3 EQUAL VERTICAL COLUMNS**.
-    There must be clear visible gutters or folds between the 3 columns.
+    DESIGN TYPE: FLAT 2D PRINT LAYOUT.
+    VIEW: Top-down, perfectly flat.
+    LAYOUT: The image MUST be a single rectangular canvas visually divided into **EXACTLY 3 EQUAL VERTICAL COLUMNS** (Tri-fold structure).
     STYLE: ${style}. High Resolution Vector Infographic.
+    
+    NEGATIVE PROMPT:
+    - NO 3D rendering.
+    - NO perspective view.
+    - NO stack of papers.
+    - NO showing the brochure on a table or desk.
+    - NO multiple sheets of paper.
+    - NO shadows or curling paper edges.
+    - NO contact info templates like "[Phone Number]" or "[Address]".
     `;
 
     const promptA = `
     ${structuralInstruction}
     CONTEXT: OUTER SIDE (Back Panel, Fold Panel, Front Cover).
     
-    COLUMN 1 (Left - Back Panel): Minimalist generic safety advice icons (e.g. Wash hands, Wear mask). NO contact placeholders.
-    COLUMN 2 (Center - Fold Panel): Logo, Motto, Clean branding graphic.
-    COLUMN 3 (Right - FRONT COVER): Big Bold Title "${title}", Hero Illustration, Subtitle.
+    Structure (Left to Right):
+    - COLUMN 1 (Left - Back Panel): "Prevention Tips". List of 4 icon+text items. 
+    - COLUMN 2 (Center - Fold Panel): Minimal Branding. A single clean vector icon and the slogan.
+    - COLUMN 3 (Right - FRONT COVER): Big Bold Title "${title}" at the top. Large Hero Illustration in the middle. Subtitle at bottom.
     
-    Topic: ${desc}
+    Topic: ${topic}. ${desc}
     ${globalInjector}
     `;
 
@@ -426,26 +560,28 @@ export const generatePromkesMedia = async (
     ${structuralInstruction}
     CONTEXT: INNER SIDE (Left Panel, Center Panel, Right Panel).
     
-    COLUMN 1 (Left): Introduction/Problem. Title at top, followed by a text block and an icon.
-    COLUMN 2 (Center): Main Infographic. A process diagram or list of symptoms. Dense information.
-    COLUMN 3 (Right): Treatment/Solution. Numbered list (1, 2, 3) and a generic "Consult your doctor" icon at the bottom.
+    Structure (Left to Right):
+    - COLUMN 1 (Left): "Understanding the Problem". Headline + Text Block + Diagram.
+    - COLUMN 2 (Center): "Main Infographic". A detailed central flowchart or anatomy diagram spanning the width of the column.
+    - COLUMN 3 (Right): "Treatment & Action". Numbered list (1, 2, 3) explaining steps. Bottom: Generic "Consult Doctor" icon (No text).
     
-    Topic: ${desc}
+    Topic: ${topic}. ${desc}
     ${globalInjector}
     `;
 
     try {
       // Execute both requests in parallel
+      // NOTE: Using 16:9 Landscape for Leaflet to support the 3-column layout better than 9:16
       const [responseA, responseB] = await Promise.all([
         ai.models.generateContent({
           model: 'gemini-3-pro-image-preview',
           contents: { parts: [{ text: promptA }] },
-          config: { imageConfig: { aspectRatio: '9:16', imageSize: size as any } }
+          config: { imageConfig: { aspectRatio: '16:9', imageSize: size as any } }
         }),
         ai.models.generateContent({
           model: 'gemini-3-pro-image-preview',
           contents: { parts: [{ text: promptB }] },
-          config: { imageConfig: { aspectRatio: '9:16', imageSize: size as any } }
+          config: { imageConfig: { aspectRatio: '16:9', imageSize: size as any } }
         })
       ]);
 
@@ -493,7 +629,8 @@ export const generatePromkesMedia = async (
   }
 
   const prompt = `Design a High-Density Educational Infographic.
-  Title: "${title}"
+  Topic: "${topic}"
+  Headline Title: "${title}"
   Content Description: ${desc}.
   Layout Strategy: ${compositionInstruction}
   ${globalInjector}
@@ -576,22 +713,4 @@ export const generateQuizQuestions = async (category: string): Promise<QuizQuest
     console.error("Quiz Gen Error:", error);
     throw error;
   }
-};
-
-// Helper
-const fileToPart = async (file: File) => {
-  return new Promise<{ inlineData: { data: string; mimeType: string } }>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = (reader.result as string).split(',')[1];
-      resolve({
-        inlineData: {
-          data: base64String,
-          mimeType: file.type,
-        },
-      });
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 };

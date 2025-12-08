@@ -14,16 +14,18 @@ export interface SwamedikasiForm {
   complaint: string;
   currentMeds: string;
   treatment: string;
-  patientCondition: string; // New field
+  patientCondition: string;
   image: File | null;
+  sourceFile: File | null; // New field: Obat yang dimiliki user
 }
 
 export interface PromkesForm {
+  topic: string;
   title: string;
   description: string;
   aspectRatio: string;
   style: string;
-  colorPalette: string; // Stores the 'value' or 'label' of the palette
+  colorPalette: string;
   size: string;
 }
 

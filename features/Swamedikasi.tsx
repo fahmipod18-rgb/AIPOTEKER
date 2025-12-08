@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { SwamedikasiForm } from '../types';
 import { analyzeSwamedikasi } from '../services/geminiService';
 import { ResponseCard } from '../components/ResponseCard';
-import { Upload, AlertCircle } from 'lucide-react';
+import { Upload, AlertCircle, FileText, PackageCheck } from 'lucide-react';
 
 const PATIENT_CONDITIONS = [
   "Tidak ada kondisi khusus",
@@ -20,7 +21,8 @@ export const Swamedikasi: React.FC = () => {
     currentMeds: '', 
     treatment: '', 
     patientCondition: PATIENT_CONDITIONS[0],
-    image: null
+    image: null,
+    sourceFile: null // New field
   });
   
   // Separate state for the dropdown selection and the custom text input
@@ -59,10 +61,10 @@ export const Swamedikasi: React.FC = () => {
         patientCondition: selectedCondition === 'Lainnya' ? customCondition : selectedCondition
       };
       
-      const data = await analyzeSwamedikasi(finalData, formData.image);
+      const data = await analyzeSwamedikasi(finalData, formData.image, formData.sourceFile);
       setResult(data);
     } catch (err) {
-      alert("Gagal melakukan analisis. Mohon periksa input dan coba lagi.");
+      alert("Gagal melakukan analisis. Mohon periksa input dan coba lagi. Pastikan file source adalah PDF, CSV, atau TXT.");
     } finally {
       setLoading(false);
     }
@@ -159,19 +161,50 @@ export const Swamedikasi: React.FC = () => {
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1">Bukti Visual (Opsional)</label>
-          <div className="relative group">
-            <input 
-              type="file" 
-              accept="image/*"
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-              onChange={e => setFormData({...formData, image: e.target.files?.[0] || null})}
-            />
-            <div className={`flex items-center justify-center p-4 border-2 border-dashed rounded-xl transition-all ${formData.image ? 'border-primary bg-primary/5 dark:bg-primary/20' : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-              <div className="text-center">
-                <Upload className={`mx-auto h-6 w-6 mb-2 ${formData.image ? 'text-primary' : 'text-slate-400'}`} />
-                <p className="text-xs text-slate-500 dark:text-slate-400">{formData.image ? formData.image.name : "Upload foto kondisi (kulit, ruam, dll.)"}</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* IMAGE PROOF */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1">Bukti Visual (Opsional)</label>
+            <div className="relative group h-24">
+              <input 
+                type="file" 
+                accept="image/*"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                onChange={e => setFormData({...formData, image: e.target.files?.[0] || null})}
+              />
+              <div className={`w-full h-full flex items-center justify-center p-2 border-2 border-dashed rounded-xl transition-all ${formData.image ? 'border-primary bg-primary/5 dark:bg-primary/20' : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                <div className="text-center">
+                  <Upload className={`mx-auto h-5 w-5 mb-1 ${formData.image ? 'text-primary' : 'text-slate-400'}`} />
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate px-2">{formData.image ? formData.image.name : "Foto Kondisi"}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SOURCE FILE (STOCK) */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1 flex items-center gap-1">
+               Source Obat (Stok Pribadi) <span className="text-[9px] bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">Opsional</span>
+            </label>
+            <div className="relative group h-24">
+              <input 
+                type="file" 
+                // Updated accept attribute to restrict unsupported formats
+                accept=".pdf, .csv, .txt, image/*"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                onChange={e => setFormData({...formData, sourceFile: e.target.files?.[0] || null})}
+              />
+              <div className={`w-full h-full flex items-center justify-center p-2 border-2 border-dashed rounded-xl transition-all ${formData.sourceFile ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                <div className="text-center">
+                  {formData.sourceFile ? (
+                     <PackageCheck className="mx-auto h-5 w-5 mb-1 text-green-600 dark:text-green-400" />
+                  ) : (
+                     <FileText className="mx-auto h-5 w-5 mb-1 text-slate-400" />
+                  )}
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate px-2">
+                    {formData.sourceFile ? formData.sourceFile.name : "Upload PDF/CSV/TXT/IMG"}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -182,7 +215,7 @@ export const Swamedikasi: React.FC = () => {
           disabled={loading}
           className="w-full py-3 bg-primary text-white rounded-xl font-medium shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
         >
-          {loading ? 'Menganalisis...' : 'Buat Rekomendasi Klinis'}
+          {loading ? 'Menganalisis Klinis & Stok...' : 'Buat Rekomendasi Klinis'}
         </button>
       </form>
 

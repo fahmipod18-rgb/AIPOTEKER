@@ -1,16 +1,18 @@
 
 import React from 'react';
 import { View } from '../types';
-import { Pill, Activity, Files, Image as ImageIcon, Cross, Moon, Sun, Settings, GraduationCap } from 'lucide-react';
+import { Pill, Activity, Files, Image as ImageIcon, Cross, Moon, Sun, Settings, GraduationCap, X } from 'lucide-react';
 
 interface SidebarProps {
   currentView: View;
   onViewChange: (view: View) => void;
   theme: 'light' | 'dark';
   toggleTheme: () => void;
+  isOpen?: boolean; // Mobile state
+  onClose?: () => void; // Mobile close handler
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, theme, toggleTheme }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, theme, toggleTheme, isOpen = false, onClose }) => {
   const menuItems = [
     { id: View.SWAMEDIKASI, label: 'Swamedikasi', icon: <Activity size={20} />, description: 'Layanan Swamedikasi' },
     { id: View.DRUG_INFO, label: 'Informasi Obat', icon: <Pill size={20} />, description: 'Pusat Informasi Obat' },
@@ -21,17 +23,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, the
   ];
 
   return (
-    <div className="w-64 h-screen fixed left-0 top-0 glass-panel border-r border-white/40 dark:border-slate-700/50 flex flex-col z-20">
-      <div className="p-6 border-b border-gray-200/50 dark:border-gray-700/50">
-        <div className="flex items-center gap-2 text-primary font-bold text-xl tracking-tight">
-          <div className="bg-primary text-white p-1 rounded-lg shadow-md shadow-primary/20">
-            <Cross size={20} />
+    <aside 
+      className={`
+        fixed top-0 left-0 h-screen w-64 glass-panel border-r border-white/40 dark:border-slate-700/50 flex flex-col z-40
+        transform transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
+        md:translate-x-0
+      `}
+    >
+      <div className="p-6 border-b border-gray-200/50 dark:border-gray-700/50 flex justify-between items-start">
+        <div>
+          <div className="flex items-center gap-2 text-primary font-bold text-xl tracking-tight">
+            <div className="bg-primary text-white p-1 rounded-lg shadow-md shadow-primary/20">
+              <Cross size={20} />
+            </div>
+            <span className="dark:text-white transition-colors">AIPOTEKER</span>
           </div>
-          <span className="dark:text-white transition-colors">AIPOTEKER</span>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-light tracking-wide">
+            Dashboard Farmasi AI
+          </p>
         </div>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-light tracking-wide">
-          Dashboard Farmasi AI
-        </p>
+        {/* Mobile Close Button */}
+        <button 
+          onClick={onClose}
+          className="md:hidden p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+        >
+          <X size={20} />
+        </button>
       </div>
       
       <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
@@ -71,6 +89,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, the
            </p>
         </div>
       </div>
-    </div>
+    </aside>
   );
 };
